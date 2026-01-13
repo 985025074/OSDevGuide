@@ -11,6 +11,71 @@
 对于 lazy_static 本身采用 refcell 的 ,全面改成 mutex 来保障安全性.
 **refcell 是 runtime check 的,大概率会出现 alreay borrowed panic**
 
+### entry.asm 的修改:
+
+每个 hart 需要分配一定的 stack:
+
+```asm
+.section .text.entry
+.globl _start
+_start:
+    # a0: hart id, a1: dtb / opaque
+    li t0, 4096 * 16          # per-hart stack size (64KiB)
+    # Stack grows downward; start from the end of the reserved stack region.
+    la sp, boot_stack_bottom
+    mul t0, t0, a0
+    sub sp, sp, t0            # pick stack slice for this hart
+    mv tp, a0                 # stash hart id in tp for S-mode use
+    call rust_main
+.section .bss.stack
+boot_stack_top:
+    .space 4096*64
+boot_stack_bottom:
+
+
+```
+
+为此,我们需要确保 分配的 stack 按照一定的顺序.为此 boot_stack 必须要 适当分配
+
+### 对于 trap.asm 的修改
+
+需要保存一些多线程需要使用的结构 与数据 如 tls.具体参考代码. 这部分较为琐碎.
+
+### 对于 main.rs 的修改
+
+由于多核的启动顺序不可预测,需要采取一定的同步措施
+
+```rs
+// Keep this flag in .data so clearing .bss doesn't reset it after the
+// bootstrap hart marks initialization as done.
+#[unsafe(link_section = ".data")]
+static BOOT_HART_INITED: AtomicBool = AtomicBool::new(false);
+// Secondary harts must not touch .bss-backed globals before the boot hart clears .bss.
+#[unsafe(link_section = ".data")]
+static BOOT_BSS_CLEARED: AtomicBool = AtomicBool::new(false);
+// Secondary harts must not enter the scheduler before the boot hart finishes global init.
+#[unsafe(link_section = ".data")]
+static BOOT_GLOBAL_INIT_DONE: AtomicBool = AtomicBool::new(false);
+
+
+```
+
+这里三个原子变量 分别同步三个时机. 具体的请参考 下面 main.rs 的完整调度过程.
+
+### 中断的关闭
+
+对于一些操作.我们需要保证他是"原语",中间不被终端,因此,需要进行清理中断操作
+如任务的加入.main 的初始化
+
+```rs
+    // Avoid timer interrupts preempting early-boot code that may hold spin::Mutex locks
+    // (e.g., heap allocator, ext4, ready queue). We'll re-enable interrupts in the
+    // scheduler/idle loop and on sret back to user.
+    unsafe { riscv::register::sstatus::clear_sie() };
+
+
+```
+
 ## 基本任务结构
 
 首先还是遵循了 mutable 和 nt mutable 分离的原则.
