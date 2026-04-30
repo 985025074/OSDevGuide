@@ -47,7 +47,7 @@
 建议顺序：
 
 1. 先收 `procfs` 边界与语义源头。
-2. 再拆 `syscall/filesystem.rs` 的公共逻辑。
+2. ~~再拆 `syscall/filesystem.rs` 的公共逻辑。~~ ✅ 已拆为 `syscall/filesystem/`（17 文件）；继续收敛 path/mount utils（见 Issue #6）。
 3. 再推进 `files` 对象与 `CLONE_FILES` 生命周期。
 4. 最后结合对应回归，再做 ext4/调度热点优化。
 
@@ -114,7 +114,7 @@
 
 优先项：
 
-- 继续从 `syscall/filesystem.rs` 下沉公共路径解析、errno 映射、权限判断逻辑。
+- 继续从 `syscall/filesystem/` 各模块下沉公共路径解析、errno 映射、权限判断逻辑。
 - 继续清理仍使用 `translated_str()` 直接杀进程的路径参数读取点。
 - 对高频对象抽公共 helper，而不是在 syscall 层重复分支。
 - 统一 pseudo/ext4/procfs 路径分流，不再让多个 syscall 各自维护一套分支规则。

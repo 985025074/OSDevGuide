@@ -10,25 +10,26 @@
 
 ### 🔴 严重问题
 
-#### 1. `syscall/filesystem.rs` — 单文件 10930 行
+#### 1. ~~`syscall/filesystem.rs` — 单文件 10930 行~~ ✅ 已拆分（2026-04）
 
-- **286 个函数**全部堆在一个文件，涵盖 open/read/write/mkdir/stat/mount/xattr/fallocate 等所有文件系统 syscall
-- 无任何子系统分层，无法按功能独立阅读或维护
-- 与 `fs/`、`task/`、`mm/` 多达 15 个模块直接耦合
-- 错误码以 `const EBADF: isize = -9` 形式散落在文件顶部（40+ 个）
+> **已完成**：拆为 `syscall/filesystem/` 子目录（17 个文件，共 11566 LOC）。
+> 其余大文件也已拆分为子目录。
 
-其余 syscall 文件也偏大：
+当前 syscall 目录结构（2026-04 更新）：
 
-| 文件 | 行数 |
-|---|---|
-| `syscall/filesystem.rs` | **10930** |
-| `syscall/misc.rs` | 2958 |
-| `syscall/net.rs` | 2787 |
-| `syscall/process.rs` | 2372 |
-| `syscall/signal.rs` | 1642 |
-| `syscall/memory.rs` | 1597 |
-| `syscall/time_sys.rs` | 1338 |
-| `syscall/sysv_ipc.rs` | 1334 |
+| 子目录/文件 | 行数 | 状态 |
+|---|---|---|
+| `syscall/filesystem/` (17 files) | 11566 | ✅ 已拆分 |
+| `syscall/misc/` | 3070 | ✅ 已拆分 |
+| `syscall/net/` | 2820 | ✅ 已拆分 |
+| `syscall/process/` | 2388 | ✅ 已拆分 |
+| `syscall/signal/` | 1680 | ✅ 已拆分 |
+| `syscall/memory/` | 1649 | ✅ 已拆分 |
+| `syscall/time_sys.rs` | 1333 | 单文件，尚可 |
+| `syscall/sysv_ipc.rs` | 1328 | 单文件，尚可 |
+| `syscall/mod.rs` | 898 | 分发入口 |
+
+**遗留**：`filesystem/io.rs`(1425)、`filesystem/mount_utils.rs`(1362)、`filesystem/path_utils.rs`(1047) 仍偏大，可在后续语义修改时继续拆分（见 Issue #6）。
 
 #### 2. `ProcessControlBlockInner` — 115 个字段压一把 `SpinMutex`
 
@@ -36,11 +37,10 @@
 - SMP 场景下任何 syscall 都可能竞争同一把锁，严重影响并发吞吐
 - `process_block.rs` 共 2152 行
 
-#### 3. 无统一错误类型
+#### 3. ~~无统一错误类型~~ ✅ 已建立（2026-04）
 
-- 每个 syscall 文件各自定义相同的 `const EBADF: isize = -9` 等常量
-- syscall 返回值统一是裸 `isize`，无类型安全保障
-- 错误语义（如什么场景返回 `EFAULT` vs `EINVAL`）散落各处，难以统一审查
+> **已完成**：`os/src/syscall/error.rs` 定义了 `SyscallError` enum，已有 1928 处使用。
+> **遗留**：部分文件（`ctx_utils.rs`、`fd_utils.rs`）仍有 `Result<_, isize>` 签名待收敛。
 
 ---
 
@@ -70,11 +70,11 @@
 
 | 维度 | arceos | **starry-mix** | oskernel2025 | CongCore 现状 |
 |---|---|---|---|---|
-| syscall 文件大小 | ~200 行/文件 | **100–300 行/文件** | 几万行/文件 | 最大 10930 行 |
+| syscall 文件大小 | ~200 行/文件 | **100–300 行/文件** | 几万行/文件 | 已拆分，最大 1425 行 |
 | PCB 字段数 | ~10（极简） | ~50（分层） | ~300 | **115（单锁）** |
 | 文件抽象 | `VfsNodeOps` trait | `FileLike` trait | `FileOp` trait | `File` trait ✓ |
-| 子系统分层 | 15 个独立 crate | syscall 按语义分目录 | 无 | 无 |
-| 错误类型 | `LinuxError` enum | `LinuxError` enum | 裸 isize | **裸 isize** |
+| 子系统分层 | 15 个独立 crate | syscall 按语义分目录 | 无 | syscall 按语义分目录 ✓ |
+| 错误类型 | `LinuxError` enum | `LinuxError` enum | 裸 isize | `SyscallError` enum ✓ |
 
 **最佳参考：starry-mix** — 在保持 Linux 兼容性的同时，syscall 按语义子目录组织，文件大小可控，PCB 分层，错误类型统一。
 
@@ -100,10 +100,10 @@ api/src/syscall/
 
 ## 三、改进优先级
 
-### P0 — 代码组织（最高优先，影响所有后续维护）
+### P0 — 代码组织 ✅ 已完成
 
-1. **拆分 `syscall/filesystem.rs`** → 按语义建子目录 `syscall/fs/`，每文件 200–500 行
-2. **建立统一 `SyscallError` 枚举** → 替换散落的 `isize` 常量，提供类型安全的错误转换
+1. ~~**拆分 `syscall/filesystem.rs`**~~ → 已拆为 `syscall/filesystem/` 子目录（17 文件）；其余大文件也已拆分
+2. ~~**建立统一 `SyscallError` 枚举**~~ → `error.rs` 已定义，1928 处使用；剩余 `Result<_, isize>` 待收敛
 
 ### P1 — 锁粒度
 
