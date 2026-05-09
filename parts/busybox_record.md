@@ -23,7 +23,7 @@ eval "./busybox $line"
 
 并根据返回码判断 success/fail（`false` 是特例：允许非 0 仍判 success）。
 
-在整套测试编排里，主机侧脚本 [scripts/run_os_tests.sh](../../scripts/run_os_tests.sh) 会在 QEMU 内分别进入 `/extra/riscv/musl` 与 `/extra/riscv/glibc`（两套 userland），并通常以 `./busybox sh ./busybox_testcode.sh` 的方式运行该脚本。
+在整套测试编排里，当前仓库的主机侧入口是 [os/run.sh](../../os/run.sh)；busybox 脚本本身保留在测试镜像/`testsuits-for-oskernel` 中，通常在 QEMU 内分别进入 `/extra/riscv/musl` 与 `/extra/riscv/glibc`（两套 userland）后，以 `./busybox sh ./busybox_testcode.sh` 的方式运行。
 
 ### 命令覆盖范围（busybox_cmd.txt）
 
@@ -85,27 +85,27 @@ glibc 动态链接器启动时非常依赖初始栈布局（argc/argv/envp/auxv�
 - [os/src/task/process_block.rs](../../os/src/task/process_block.rs)：
   - 引入 `build_linux_stack()`：在用户栈上构造 Linux 风格布局，包含 `envp` 与 `auxv`（如 `AT_PHDR/AT_PHENT/AT_PHNUM/AT_ENTRY/AT_PAGESZ/AT_RANDOM/...`），并保持 16 字节对齐。
   - 在 `ProcessControlBlock::new/exec` 中使用该栈布局，并设置 `a0/a1/a2` 为 `argc/argv/envp`。
-- [os/src/trap/trap.asm](../../os/src/trap/trap.asm)：trap 入口/出口正确区分并恢复用户态 `tp`（TLS），同时在内核中使用 `tp` 作为 hart id。
+- [os/src/arch/riscv64/trap/trap.asm](../../os/src/arch/riscv64/trap/trap.asm)：trap 入口/出口正确区分并恢复用户态 `tp`（TLS），同时在内核中使用 `tp` 作为 hart id。
 
 ### 5) 目录遍历与文件权限语义：getdents64 与 readable/writable
 
-- [os/src/fs/inode.rs](../../os/src/fs/inode.rs) + [os/src/syscall/filesystem.rs](../../os/src/syscall/filesystem.rs)：
+- [os/src/fs/inode.rs](../../os/src/fs/inode.rs) + [os/src/syscall/filesystem/dir.rs](../../os/src/syscall/filesystem/dir.rs) + [os/src/syscall/filesystem/io.rs](../../os/src/syscall/filesystem/io.rs)：
   - 为目录读取引入独立的 `dir_offset`，避免 `getdents64` 与普通文件 `read` 共享同一个 offset。
   - `getdents64` 使用内核缓冲区批量构造 `linux_dirent64` 并再拷回用户态，降低逐字节地址翻译开销。
   - `read/write` 增加 `readable()/writable()` 检查，避免 busybox 在错误 fd/权限场景下出现异常行为。
 
 ### 6) glibc 启动常用 syscall：mprotect / set_tid_address / robust_list / uid/gid/tid / 信号
 
-- [os/src/syscall/memory.rs](../../os/src/syscall/memory.rs)：加入 `mprotect` stub（直接返回 0）。
-- [os/src/syscall/misc.rs](../../os/src/syscall/misc.rs)：
+- [os/src/syscall/memory/unmap.rs](../../os/src/syscall/memory/unmap.rs)：加入 `mprotect` stub（直接返回 0）。
+- [os/src/syscall/misc/mod.rs](../../os/src/syscall/misc/mod.rs)：
   - `uname` 伪装 `release` 为 `5.15.0`（避免用户态因“内核版本过低”走到不兼容路径）。
   - `getuid/geteuid/getgid/getegid` 返回 0。
   - `gettid` 返回当前 pid（简化实现）。
   - `set_tid_address` 返回 pid；`set_robust_list` 返回 0。
-- [os/src/syscall/signal.rs](../../os/src/syscall/signal.rs)：
+- [os/src/syscall/signal/mod.rs](../../os/src/syscall/signal/mod.rs)：
   - `tgkill` 兼容实现（退化调用已有 `kill` 路径）。
   - `rt_sigaction/rt_sigprocmask/rt_sigreturn` 以“最小可用”的 stub 形式返回成功，并在需要时清零 old buffer，满足 glibc/busybox 启动阶段对信号接口的探测。
 
 ### 7) execve 细节：argv[0] 兜底
 
-- [os/src/syscall/process.rs](../../os/src/syscall/process.rs)：当用户传入的 argv 为空时，补上 `argv[0] = path`（一些程序/脚本依赖 argv[0] 非空）。
+- [os/src/syscall/process/exec.rs](../../os/src/syscall/process/exec.rs)：当用户传入的 argv 为空时，补上 `argv[0] = path`（一些程序/脚本依赖 argv[0] 非空）。

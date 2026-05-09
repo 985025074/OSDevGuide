@@ -11,8 +11,7 @@ misc
 ```bash
 #![no_std] can't find crate for test in vs code
 #380
-````
+```
 
 我记得之前按照 github 上面的方法做过 但是这次知道 为什么又出现错误了
-
 

@@ -3,7 +3,7 @@
 ## 什么是 futex
 
 futex 是 Linux 提供的一种低层同步机制，用用户态原子操作完成快路径，在竞争时通过内核实现高效阻塞与唤醒
-utex 不是一个内核对象
+futex 不是一个内核对象
 
 它是：
 
@@ -42,11 +42,11 @@ Java / Go runtime
 - 新增 futex syscall 实现：[os/src/syscall/futex.rs](../../os/src/syscall/futex.rs)
 - 新增 sched 系列 syscall（大量是兼容/存取 PCB 字段的“最小实现”）：[os/src/syscall/sched.rs](../../os/src/syscall/sched.rs)
 - syscall 分发表接线 futex/sched： [os/src/syscall/mod.rs](../../os/src/syscall/mod.rs)
-- 线程式 `clone(CLONE_VM|...)` 支持： [os/src/syscall/process.rs](../../os/src/syscall/process.rs)
+- 线程式 `clone(CLONE_VM|...)` 支持： [os/src/syscall/process/fork.rs](../../os/src/syscall/process/fork.rs)
 - tid/资源模型支持“仅 trap_cx，无内核分配用户栈”的线程： [os/src/task/id.rs](../../os/src/task/id.rs)
 - 线程退出时的 `clear_child_tid + futex_wake`（pthread join 关键路径）： [os/src/task/processor.rs](../../os/src/task/processor.rs)
 - TCB 增加 `clear_child_tid` 字段 + 新建 linux thread 的构造： [os/src/task/task_block.rs](../../os/src/task/task_block.rs)
-- `set_tid_address/gettid` 改为返回 tid 并记录 clear 地址： [os/src/syscall/misc.rs](../../os/src/syscall/misc.rs)
+- `set_tid_address/gettid` 改为返回 tid 并记录 clear 地址： [os/src/syscall/misc/other.rs](../../os/src/syscall/misc/other.rs)
 - 信号投递时唤醒所有线程： [os/src/task/signal.rs](../../os/src/task/signal.rs)
 - trap 返回前检查致命信号并退出： [os/src/trap/mod.rs](../../os/src/trap/mod.rs)
 
@@ -109,7 +109,7 @@ Java / Go runtime
 
 ### 4.1 `clone(CLONE_VM|...)`：创建 linux thread
 
-在 [os/src/syscall/process.rs](../../os/src/syscall/process.rs) 中：
+在 [os/src/syscall/process/fork.rs](../../os/src/syscall/process/fork.rs) 中：
 
 - 识别 `CLONE_VM`：认为这是线程（共享地址空间）而不是进程 fork
 - 通过 `TaskControlBlock::new_linux_thread(process)` 创建新线程 TCB（见 4.2）
@@ -141,7 +141,7 @@ Java / Go runtime
 
 ### 4.3 `set_tid_address/gettid`：以 tid 为核心（非 pid）
 
-在 [os/src/syscall/misc.rs](../../os/src/syscall/misc.rs) 中：
+在 [os/src/syscall/misc/other.rs](../../os/src/syscall/misc/other.rs) 中：
 
 - `syscall_set_tid_address(tidptr)`：
   - 若 `tidptr != 0`，将当前线程的 `clear_child_tid = Some(tidptr)`

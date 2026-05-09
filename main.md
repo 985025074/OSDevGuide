@@ -17,7 +17,7 @@
 
 ## todoList
 
-1. 添加 long arch 支持,多核,文档 //
+1. 添加 LoongArch 支持,多核,文档 //
    2026.1.31 完成arch licbench
 2. 完成ltp
 3. bug
@@ -33,13 +33,13 @@
 - [文件系统](./parts/filesystem.md)
 - [内存空间设计](./parts/memory_space.md)
 - [如何支持多架构?](./parts/multi_arch.md)
-- [优化](./parts/optimize.md)
+- [优化记录](./improve.md)
 
 一些开发文档,记录一些开发细节
 
-- [Shell]
-- [ext4-fs-packer 说明]
-- [misc 各种开发记录]
+- [Shell / 工作日志](./parts/work_log.md)
+- [ext4-fs-packer 与双镜像说明](./parts/disk_img_description.md)
+- [misc 各种开发记录](./problems/project_log.md)
 - [为通过 BasicTest 而做的努力](./parts/basictest_record.md)
 - [为通过 Busybox 而做的努力](./parts/busybox_record.md)
-- [为做 cyclictest_testcode 而作的努力]
+- [为做 cyclictest_testcode 而作的努力](./parts/loongarch_support.md)
